@@ -356,7 +356,7 @@ go_to_main id = do
 
 get_count_pages category = do
   conn <- get_conn
-  
+
   case category of
     "top_free" -> query_ conn "select count(*) as count FROM bots where type='free'" :: IO [Only Int]
     "top_pay" -> query_ conn "select count(*) as count FROM bots where type='pay'" :: IO [Only Int]
@@ -379,55 +379,56 @@ go_to_category id category page mid = do
 
 isInteger s = case reads s :: [(Integer, String)] of
   [(_, "")] -> True
-  _         -> False  
+  _         -> False
 
 dataInlineButton text callback_data = InlineKeyboardButton text Nothing (Just callback_data) Nothing Nothing Nothing Nothing
 
+collect_page_buttons i page pages category = do
+  if i == pages then do
+    return []
+  else do
+    if i == page then do
+      next <- collect_page_buttons (i + 1) page pages category
+      return ((dataInlineButton (T.pack ("· " ++ (show (page + 1)) ++ " ·")) "no_reply") : next)
+    else do
+      if i == 0 then do
+        next <- collect_page_buttons (i + 1) page pages category
+        return ((dataInlineButton (T.pack ("« " ++ (show 1))) (T.pack ("go_to_category " ++ category ++ " " ++ (show 0)))) : next) 
+      else do
+        if i == pages - 1 then do
+          next <- collect_page_buttons (i + 1) page pages category
+          return ((dataInlineButton (T.pack (((show pages)) ++ " »")) (T.pack ("go_to_category " ++ category ++ " " ++ (show (pages - 1))))) : next)
+        else do
+          if (i < page) && (page - i) <= (max 1 (4 - pages + page)) then do
+             next <- collect_page_buttons (i + 1) page pages category
+             return ((dataInlineButton (T.pack ("‹ " ++ (show (i + 1)))) (T.pack ("go_to_category " ++ category ++ " " ++ (show i)))) : next)
+          else do
+            if (i > page) && (i - page) <= (max 1 (3 - page)) then do
+              next <- collect_page_buttons (i + 1) page pages category
+              return ((dataInlineButton (T.pack (((show (i + 1))) ++ " ›")) (T.pack ("go_to_category " ++ category ++ " " ++ (show i)))) : next)
+            else do
+              collect_page_buttons (i + 1) page pages category
+
+
+
 inline_page_buttons :: String -> Int -> IO [[InlineKeyboardButton]]
+
 inline_page_buttons category page = do
-  buttons <- newIORef []
-  
-  if (page > 1) then do
-    was0 <- readIORef buttons
-    writeIORef buttons (was0 ++ [dataInlineButton (T.pack ("« " ++ (show 1))) (T.pack ("go_to_category " ++ category ++ " " ++ (show 0)))])
-  else print "x"
-
-  if page > 0 then do
-    was1 <- readIORef buttons
-    writeIORef buttons (was1 ++ [dataInlineButton (T.pack ("‹ " ++ (show page))) (T.pack ("go_to_category " ++ category ++ " " ++ (show (page - 1))))])
-  else print "x"
-
-  was2 <- readIORef buttons
-  writeIORef buttons (was2 ++ [dataInlineButton (T.pack ("· " ++ (show (page + 1)) ++ " ·")) "no_reply"])
-
-  pages <- get_pages category 
-
-  if page < pages - 1 then do
-    was3 <- readIORef buttons
-    writeIORef buttons (was3 ++ [dataInlineButton (T.pack (((show (page + 2))) ++ " ›")) (T.pack ("go_to_category " ++ category ++ " " ++ (show (page + 1))))])
-  else print "x"
-
-  if page < pages - 2 then do
-    was4 <- readIORef buttons
-    writeIORef buttons (was4 ++ [dataInlineButton (T.pack (((show pages)) ++ " »")) (T.pack ("go_to_category " ++ category ++ " " ++ (show (pages - 1))))])
-  else print "x"
-
-  ref_buttons <- readIORef buttons
-  let ret = [ref_buttons]
+  pages <- get_pages category
+  rec_buttons <- collect_page_buttons 0 page pages category
+  let ret = [rec_buttons]
   return ret
 
 process id text = do
   conn <- get_conn
-
   chat <- get_username id
-  print chat
 
   if text == "/start" then do
     in_bd_x <- in_bd id
     if not in_bd_x then do
 
       execute conn "insert into users (id, flag) values (?, ?)" (id :: Int, 0 :: Int) :: IO GHC.Int.Int64
-      print "Not in bd!"
+      print (show "Not in bd!")
 
     else print "In bd!"
 
@@ -441,7 +442,7 @@ process id text = do
       0 -> case text of
         "🎰 Магазин" -> go_to_shop id
         "➕ Добавить бота" -> do
-          set_flag id 7
+          _ <- set_flag id 7
           mySendMessageWithRM (fromIntegral id) "Введите название бота" cancel_button
         _ -> print "Not in case!"
 
@@ -449,8 +450,8 @@ process id text = do
         "🅾️ Отмена" -> go_to_main id
 
         _ -> do
-          set_link id text
-          set_flag id 3
+          _ <- set_link id text
+          _ <- set_flag id 3
           mySendMessage (fromIntegral id) "Отлично, Введите описание бота"
 
       2 -> case text of
@@ -461,8 +462,8 @@ process id text = do
         "🅾️ Отмена" -> go_to_main id
 
         _ -> do
-          set_description id text
-          set_flag id 4
+          _ <- set_description id text
+          _ <- set_flag id 4
           mySendMessageWithRM (fromIntegral id) "👇 Выберите самую подходящую категорию!" choose_category_buttons
 
       4 -> case text of
@@ -471,8 +472,8 @@ process id text = do
         _ -> do
           if is_category text then do
             let category = text
-            set_category id (encodeCategory category)
-            set_flag id 5
+            _ <- set_category id (encodeCategory category)
+            _ <- set_flag id 5
             mySendMessageWithRM (fromIntegral id) "Ваш бот платный или бесплатный?" bot_type_buttons
             
             ----------
@@ -483,13 +484,13 @@ process id text = do
         "🅾️ Отмена" -> go_to_main id
 
         "Платный" -> do
-          set_type id "pay"
-          set_flag id 6
+          _ <- set_type id "pay"
+          _ <- set_flag id 6
           mySendMessageWithRM (fromIntegral id) "Введите стоимость бота (Р)" cancel_button
 
         "Бесплатный" -> do
-          set_type id "free"
-          post_bot id
+          _ <- set_type id "free"
+          _ <- post_bot id
           mySendMessage (fromIntegral id) "Бот успешно размещён! ✅"
           go_to_main id
 
@@ -497,8 +498,8 @@ process id text = do
 
       6 -> case text of
         _ -> if not (isInteger text) then mySendMessage (fromIntegral id) "Введите только число!" else do
-          set_cost id text
-          post_bot id
+          _ <- set_cost id text
+          _ <- post_bot id
           mySendMessage (fromIntegral id) "Бот успешно размещён! ✅"
           go_to_main id
 
@@ -506,8 +507,8 @@ process id text = do
         "🅾️ Отмена" -> go_to_main id
 
         _ -> do
-          set_title id text
-          set_flag id 1
+          _ <- set_title id text
+          _ <- set_flag id 1
           mySendMessageWithRM (fromIntegral id) "Введите ссылку бота \nНапример: @TinderGramRobot" cancel_button
 
       _ -> print "String"
